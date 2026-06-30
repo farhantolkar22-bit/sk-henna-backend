@@ -1,0 +1,22 @@
+{
+  "name": "skhenna-backend",
+  "version": "1.0.0",
+  "description": "Backend API for SK Henna service bookings and bulk orders",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-auth-library": "^10.9.0",
+    "mongoose": "^9.7.3",
+    "nodemailer": "^9.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
