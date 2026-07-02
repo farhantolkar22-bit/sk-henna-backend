@@ -8,8 +8,11 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'farhan1625';
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@skhenna.com').toLowerCase();
+const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'farhan1625').trim();
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@skhenna.com').trim().toLowerCase();
+const BOOKING_NOTIFICATION_EMAIL = (process.env.BOOKING_NOTIFICATION_EMAIL || 'sahlajuwley22@gmail.com').trim().toLowerCase();
+
+
 
 // Middleware
 app.use(cors());
@@ -52,6 +55,7 @@ async function tryConnectDB() {
       phone: { type: String, required: true },
       nailConesQty: { type: Number, default: 0 },
       normalConesQty: { type: Number, default: 0 },
+      siderConesQty: { type: Number, default: 0 },
       bridalConesQty: { type: Number, default: 0 },
       totalPrice: { type: Number, required: true, default: 0 },
       address: { type: String, required: true },
@@ -80,8 +84,7 @@ tryConnectDB();
 // Pricing Config
 // ──────────────────────────────────────────────
 const CONE_PRICES = {
-  nailCone: 20,
-  normalCone: 20,
+  siderCone: 20,
   bridalCone: 40
 };
 
@@ -110,8 +113,11 @@ const genId = () => crypto.randomBytes(12).toString('hex');
 app.get('/api/config', (req, res) => {
   res.json({
     whatsappNumber: process.env.WHATSAPP_NUMBER || '918149814003',
+    whatsappNumber2: process.env.WHATSAPP_NUMBER2 || '919309463714',
     instagramId: '@Henna_by_shifa25',
     instagramUrl: 'https://www.instagram.com/Henna_by_shifa25',
+    instagramId2: '@sahla_hennartist',
+    instagramUrl2: 'https://www.instagram.com/sahla_hennartist',
     prices: CONE_PRICES,
     googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
@@ -125,15 +131,79 @@ app.post('/api/bookings', async (req, res) => {
       return res.status(400).json({ message: 'Please provide all required fields (Name, Phone, Date, Time, Address).' });
     }
 
+    let createdBooking;
     if (dbConnected && Booking) {
-      const booking = await Booking.create({ clientName, phone, date, time, occasion, handDetails, address, notes, status: 'pending' });
-      return res.status(201).json({ message: 'Booking created successfully!', booking });
+      createdBooking = await Booking.create({ clientName, phone, date, time, occasion, handDetails, address, notes, status: 'pending' });
     } else {
       // In-memory fallback
-      const booking = { _id: genId(), id: genId(), clientName, phone, date, time, occasion: occasion || 'Custom', handDetails: handDetails || 'Standard', address, notes, status: 'pending', createdAt: new Date().toISOString() };
-      bookings.unshift(booking);
-      return res.status(201).json({ message: 'Booking created successfully!', booking });
+      createdBooking = { _id: genId(), id: genId(), clientName, phone, date, time, occasion: occasion || 'Custom', handDetails: handDetails || 'Standard', address, notes, status: 'pending', createdAt: new Date().toISOString() };
+      bookings.unshift(createdBooking);
     }
+
+    // Send email notification to owner asynchronously (don't block the HTTP response)
+    const bookingId = createdBooking.id || createdBooking._id;
+    const bookingEmailHtml = `
+      <div style="font-family: Georgia, serif; max-width: 550px; margin: 0 auto; background: #fffaf5; padding: 32px; border-radius: 16px; border: 1px solid #fbd38d;">
+        <h1 style="color: #dd6b20; font-size: 24px; margin-bottom: 4px;">🌸 New Henna Booking!</h1>
+        <p style="color: #6b7280; font-size: 14px; margin-top: 0;">Henna by Shifa & Sahla Booking Notification</p>
+        <hr style="border: none; border-top: 1px solid #feebc8; margin: 20px 0;" />
+        
+        <h3 style="color: #9c4221; margin-top: 0;">Appointment Details</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px; width: 140px;"><strong>Booking ID:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">#${bookingId}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Client Name:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">${clientName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Phone:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">${phone}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Date:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">${date}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Time:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">${time}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Occasion:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px; color: #b7791f; font-weight: bold;">${occasion || 'Custom'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Design Area:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">${handDetails || 'Standard'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px;"><strong>Address:</strong></td>
+            <td style="padding: 6px 0; color: #374151; font-size: 14px;">${address}</td>
+          </tr>
+          ${notes ? `
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-size: 14px; vertical-align: top;"><strong>Notes:</strong></td>
+            <td style="padding: 6px 0; color: #4a5568; font-size: 14px; font-style: italic; background: #fffaf0; border-radius: 6px; padding: 8px;">${notes}</td>
+          </tr>` : ''}
+        </table>
+        
+        <div style="background: #fffdf5; border-radius: 12px; padding: 16px; border: 1px solid #fbd38d; text-align: center; margin-top: 20px;">
+          <p style="color: #7b341e; font-size: 14px; margin: 0 0 12px 0; font-weight: bold;">Need to reach the client?</p>
+          <a href="https://wa.me/${phone.replace(/[^0-9]/g, '')}" style="display: inline-block; background: #25d366; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px;" target="_blank">Chat on WhatsApp</a>
+        </div>
+      </div>
+    `;
+
+    const bookingEmails = [ADMIN_EMAIL, BOOKING_NOTIFICATION_EMAIL];
+    bookingEmails.forEach(email => {
+      sendNotificationEmail(email, `🌸 New Henna Booking: ${clientName} - ${occasion || 'Custom'}`, bookingEmailHtml)
+        .then(() => console.log(`📧 Booking email notification sent to: ${email}`))
+        .catch(err => console.error(`⚠️ Failed to send booking email notification to ${email}:`, err.message));
+    });
+
+    return res.status(201).json({ message: 'Booking created successfully!', booking: createdBooking });
   } catch (error) {
     console.error('Error creating booking:', error);
     res.status(500).json({ message: 'Server error. Failed to create booking.' });
@@ -143,26 +213,25 @@ app.post('/api/bookings', async (req, res) => {
 // Create bulk order
 app.post('/api/orders', async (req, res) => {
   try {
-    const { customerName, phone, nailConesQty, normalConesQty, bridalConesQty, address } = req.body;
+    const { customerName, phone, siderConesQty, bridalConesQty, address } = req.body;
     if (!customerName || !phone || !address) {
       return res.status(400).json({ message: 'Please provide customer name, phone, and delivery address.' });
     }
 
-    const nailQty = parseInt(nailConesQty) || 0;
-    const normalQty = parseInt(normalConesQty) || 0;
+    const siderQty = parseInt(siderConesQty) || 0;
     const bridalQty = parseInt(bridalConesQty) || 0;
 
-    if (nailQty <= 0 && normalQty <= 0 && bridalQty <= 0) {
+    if (siderQty <= 0 && bridalQty <= 0) {
       return res.status(400).json({ message: 'Order must contain at least 1 cone.' });
     }
 
-    const totalPrice = (nailQty * CONE_PRICES.nailCone) + (normalQty * CONE_PRICES.normalCone) + (bridalQty * CONE_PRICES.bridalCone);
+    const totalPrice = (siderQty * CONE_PRICES.siderCone) + (bridalQty * CONE_PRICES.bridalCone);
 
     let createdOrder;
     if (dbConnected && Order) {
-      createdOrder = await Order.create({ customerName, phone, nailConesQty: nailQty, normalConesQty: normalQty, bridalConesQty: bridalQty, totalPrice, address, status: 'pending' });
+      createdOrder = await Order.create({ customerName, phone, siderConesQty: siderQty, bridalConesQty: bridalQty, totalPrice, address, status: 'pending' });
     } else {
-      createdOrder = { _id: genId(), id: genId(), customerName, phone, nailConesQty: nailQty, normalConesQty: normalQty, bridalConesQty: bridalQty, totalPrice, address, status: 'pending', createdAt: new Date().toISOString() };
+      createdOrder = { _id: genId(), id: genId(), customerName, phone, siderConesQty: siderQty, bridalConesQty: bridalQty, totalPrice, address, status: 'pending', createdAt: new Date().toISOString() };
       orders.unshift(createdOrder);
     }
 
@@ -171,7 +240,7 @@ app.post('/api/orders', async (req, res) => {
     const orderEmailHtml = `
       <div style="font-family: Georgia, serif; max-width: 550px; margin: 0 auto; background: #fff7f0; padding: 32px; border-radius: 16px; border: 1px solid #fbcfe8;">
         <h1 style="color: #ec4899; font-size: 24px; margin-bottom: 4px;">🛍️ New Order Received!</h1>
-        <p style="color: #9d174d; font-size: 14px; margin-top: 0;">SK Henna Store Notification</p>
+        <p style="color: #6b7280; font-size: 14px; margin-top: 0;">Henna by Shifa & Sahla Store Notification</p>
         <hr style="border: none; border-top: 1px solid #fce7f3; margin: 20px 0;" />
         
         <h3 style="color: #9d174d; margin-top: 0;">Order Details</h3>
@@ -204,15 +273,10 @@ app.post('/api/orders', async (req, res) => {
               </tr>
             </thead>
             <tbody>
-              ${nailQty > 0 ? `
+              ${siderQty > 0 ? `
               <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #374151; font-size: 14px;">Nail Cone</td>
-                <td style="text-align: right; padding: 8px 0; color: #374151; font-size: 14px;">${nailQty}</td>
-              </tr>` : ''}
-              ${normalQty > 0 ? `
-              <tr style="border-bottom: 1px solid #f3f4f6;">
-                <td style="padding: 8px 0; color: #374151; font-size: 14px;">Normal Cone</td>
-                <td style="text-align: right; padding: 8px 0; color: #374151; font-size: 14px;">${normalQty}</td>
+                <td style="padding: 8px 0; color: #374151; font-size: 14px;">Sider Cone</td>
+                <td style="text-align: right; padding: 8px 0; color: #374151; font-size: 14px;">${siderQty}</td>
               </tr>` : ''}
               ${bridalQty > 0 ? `
               <tr style="border-bottom: 1px solid #f3f4f6;">
@@ -226,12 +290,19 @@ app.post('/api/orders', async (req, res) => {
             </tbody>
           </table>
         </div>
+        <div style="background: #fffdf5; border-radius: 12px; padding: 16px; border: 1px solid #fbcfe8; text-align: center; margin-top: 20px;">
+          <p style="color: #9d174d; font-size: 14px; margin: 0 0 12px 0; font-weight: bold;">Need to reach the customer?</p>
+          <a href="https://wa.me/${phone.replace(/[^0-9]/g, '')}" style="display: inline-block; background: #25d366; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px;" target="_blank">Chat on WhatsApp</a>
+        </div>
       </div>
     `;
 
-    sendNotificationEmail(ADMIN_EMAIL, `🛍️ New Order Received: #${orderId}`, orderEmailHtml)
-      .then(() => console.log(`📧 Order email notification sent to admin: ${ADMIN_EMAIL}`))
-      .catch(err => console.error('⚠️ Failed to send order email notification to admin:', err.message));
+    const orderEmails = [ADMIN_EMAIL, BOOKING_NOTIFICATION_EMAIL];
+    orderEmails.forEach(email => {
+      sendNotificationEmail(email, `🛍️ New Order Received: #${orderId}`, orderEmailHtml)
+        .then(() => console.log(`📧 Order email notification sent to: ${email}`))
+        .catch(err => console.error(`⚠️ Failed to send order email notification to ${email}:`, err.message));
+    });
 
     return res.status(201).json({ message: 'Order created successfully!', order: createdOrder });
   } catch (error) {
@@ -247,9 +318,9 @@ app.post('/api/orders', async (req, res) => {
 // Helper: Send email via Gmail REST API (bypasses SMTP auth issues)
 async function sendViaGmailAPI(to, subject, htmlBody) {
   const { OAuth2Client } = await import('google-auth-library');
-  const clientId     = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  const clientId     = (process.env.GOOGLE_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+  const refreshToken = (process.env.GMAIL_REFRESH_TOKEN || '').trim();
 
   if (!clientId || !clientSecret || !refreshToken || refreshToken === 'paste_your_refresh_token_here') {
     throw new Error('Gmail OAuth2 not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in .env');
@@ -261,10 +332,13 @@ async function sendViaGmailAPI(to, subject, htmlBody) {
   // Get fresh access token
   const { token: accessToken } = await oauth2Client.getAccessToken();
 
+  // Encode subject to Base64 to prevent UTF-8 characters/emojis from corrupting the mail headers
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject).toString('base64')}?=`;
+
   // Build raw RFC 2822 email
   const emailLines = [
     `To: ${to}`,
-    `Subject: ${subject}`,
+    `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/html; charset=UTF-8`,
     ``,
@@ -296,8 +370,8 @@ async function sendViaGmailAPI(to, subject, htmlBody) {
 
 // Legacy App Password transporter (Option A)
 const createAppPasswordTransporter = () => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+  const user = (process.env.EMAIL_USER || '').trim();
+  const pass = (process.env.EMAIL_PASS || '').trim();
   if (!user || !pass || pass === 'your_app_password_here') return null;
   return nodemailer.createTransport({
     service: 'gmail',
@@ -307,11 +381,13 @@ const createAppPasswordTransporter = () => {
 
 // Unified helper to send email notifications via either App Password or Gmail REST API
 async function sendNotificationEmail(to, subject, htmlBody) {
+  const recipient = (to || '').trim().toLowerCase();
   const appPwdTransporter = createAppPasswordTransporter();
   if (appPwdTransporter) {
+    const fromUser = (process.env.EMAIL_USER || '').trim();
     await appPwdTransporter.sendMail({
-      from: `"SK Henna 🌿" <${process.env.EMAIL_USER}>`,
-      to: to,
+      from: `"Henna by Shifa & Sahla 🌿" <${fromUser}>`,
+      to: recipient,
       subject: subject,
       html: htmlBody
     });
@@ -319,7 +395,7 @@ async function sendNotificationEmail(to, subject, htmlBody) {
   }
 
   // Fallback: Use Gmail REST API (OAuth2)
-  await sendViaGmailAPI(to, subject, htmlBody);
+  await sendViaGmailAPI(recipient, subject, htmlBody);
 }
 
 app.post('/api/auth/send-otp', async (req, res) => {
@@ -338,8 +414,10 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
     const otpHtml = `
       <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #fff7f0; padding: 32px; border-radius: 16px;">
-        <h1 style="color: #ec4899; font-size: 26px; margin-bottom: 4px;">SK_Henna ✦</h1>
-        <p style="color: #9d174d; font-size: 13px; margin-top: 0;">@Henna_by_shifa25</p>
+        <div style="margin-bottom: 12px; line-height: 1.1;">
+          <span style="color: #1e293b; font-size: 26px; font-weight: 900; letter-spacing: 0.05em; display: block;">HENNA</span>
+          <span style="color: #ec4899; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">by Shifa & Sahla ✦</span>
+        </div>
         <hr style="border: none; border-top: 1px solid #fce7f3; margin: 20px 0;" />
         <p style="color: #374151; font-size: 15px;">Your one-time verification code is:</p>
         <div style="background: linear-gradient(135deg, #f59e0b, #ec4899); border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
@@ -350,7 +428,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
       </div>
     `;
 
-    await sendNotificationEmail(email, 'Your OTP Code — SK Henna', otpHtml);
+    await sendNotificationEmail(email, 'Your OTP Code — Henna by Shifa & Sahla', otpHtml);
     console.log(`📧 OTP email sent to ${email}`);
     res.json({ success: true, message: `OTP sent to ${email}. Please check your inbox.` });
   } catch (err) {
@@ -553,11 +631,10 @@ app.get('/api/admin/stats', adminAuth, async (req, res) => {
     const conesSold = allOrders
       .filter(o => o.status !== 'cancelled')
       .reduce((totals, o) => {
-        totals.nailCones += (o.nailConesQty || 0);
-        totals.normalCones += (o.normalConesQty || 0);
+        totals.siderCones += (o.siderConesQty || 0) + (o.normalConesQty || 0);
         totals.bridalCones += (o.bridalConesQty || 0);
         return totals;
-      }, { nailCones: 0, normalCones: 0, bridalCones: 0 });
+      }, { siderCones: 0, bridalCones: 0 });
 
     res.json({
       totals: {
