@@ -1,0 +1,34 @@
+[
+  {
+    "id": "1",
+    "title": "Detailed Bridal Henna",
+    "category": "bridal",
+    "img": "/uploads/1783248688104-192875081.jpg",
+    "likes": 142,
+    "description": "Intricate floral and geometric patterns covering full hands and wrists, stained to a mahogany color."
+  },
+  {
+    "id": "2",
+    "title": "Organic Henna Cones Pack",
+    "category": "cones",
+    "img": "/henna_cones.png",
+    "likes": 98,
+    "description": "Handcrafted fresh organic henna cones packaged and ready for bridal application."
+  },
+  {
+    "id": "3",
+    "title": "Mehndi Mandalas",
+    "category": "bridal",
+    "img": "/henna_hands.png",
+    "likes": 83,
+    "description": "Elegant mandala design in the center of the palm with detailed finger detailing."
+  },
+  {
+    "id": "4",
+    "title": "Fresh Cones Lineup",
+    "category": "cones",
+    "img": "/henna_cones.png",
+    "likes": 74,
+    "description": "Fresh batch of smooth flowing cones made with pure Rajasthani henna powder."
+  }
+]

@@ -3,11 +3,110 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import multer from 'multer';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Ensure data and uploads directories exist
+const dataDir = path.join(__dirname, 'data');
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+// Initialize config flat-file
+const configPath = path.join(dataDir, 'config.json');
+const defaultConfig = {
+  whatsappNumber: process.env.WHATSAPP_NUMBER || '918149814003',
+  whatsappNumber2: process.env.WHATSAPP_NUMBER2 || '919309463714',
+  instagramId: '@Henna_by_shifa25',
+  instagramUrl: 'https://www.instagram.com/Henna_by_shifa25',
+  instagramId2: '@sahla_hennartist',
+  instagramUrl2: 'https://www.instagram.com/sahla_hennartist',
+  prices: {
+    siderCone: 20,
+    bridalCone: 40
+  }
+};
+if (!fs.existsSync(configPath)) {
+  fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+}
+
+// Initialize gallery flat-file
+const galleryPath = path.join(dataDir, 'gallery.json');
+const defaultGallery = [
+  {
+    id: "1",
+    title: 'Detailed Bridal Henna',
+    category: 'bridal',
+    img: '/henna_hands.png',
+    likes: 142,
+    description: 'Intricate floral and geometric patterns covering full hands and wrists, stained to a mahogany color.'
+  },
+  {
+    id: "2",
+    title: 'Organic Henna Cones Pack',
+    category: 'cones',
+    img: '/henna_cones.png',
+    likes: 98,
+    description: 'Handcrafted fresh organic henna cones packaged and ready for bridal application.'
+  },
+  {
+    id: "3",
+    title: 'Mehndi Mandalas',
+    category: 'bridal',
+    img: '/henna_hands.png',
+    likes: 83,
+    description: 'Elegant mandala design in the center of the palm with detailed finger detailing.'
+  },
+  {
+    id: "4",
+    title: 'Fresh Cones Lineup',
+    category: 'cones',
+    img: '/henna_cones.png',
+    likes: 74,
+    description: 'Fresh batch of smooth flowing cones made with pure Rajasthani henna powder.'
+  }
+];
+if (!fs.existsSync(galleryPath)) {
+  fs.writeFileSync(galleryPath, JSON.stringify(defaultGallery, null, 2), 'utf-8');
+}
+
+// Configure Multer for image uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+    cb(null, uniqueName);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // limit 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|webp|gif/;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mime = file.mimetype;
+    if (allowedTypes.test(ext) && allowedTypes.test(mime)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files (jpg, jpeg, png, webp, gif) are allowed!'));
+    }
+  }
+});
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'farhan1625').trim();
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@skhenna.com').trim().toLowerCase();
 const ADMIN2_PASSWORD = (process.env.ADMIN2_PASSWORD || 'sahla22').trim();
@@ -113,6 +212,18 @@ const genId = () => crypto.randomBytes(12).toString('hex');
 
 // Config
 app.get('/api/config', (req, res) => {
+  try {
+    if (fs.existsSync(configPath)) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      return res.json({
+        ...configData,
+        googleClientId: process.env.GOOGLE_CLIENT_ID || ''
+      });
+    }
+  } catch (err) {
+    console.error('Failed to read config, using defaults:', err);
+  }
+  
   res.json({
     whatsappNumber: process.env.WHATSAPP_NUMBER || '918149814003',
     whatsappNumber2: process.env.WHATSAPP_NUMBER2 || '919309463714',
@@ -120,10 +231,125 @@ app.get('/api/config', (req, res) => {
     instagramUrl: 'https://www.instagram.com/Henna_by_shifa25',
     instagramId2: '@sahla_hennartist',
     instagramUrl2: 'https://www.instagram.com/sahla_hennartist',
-    prices: CONE_PRICES,
+    prices: { siderCone: 20, bridalCone: 40 },
     googleClientId: process.env.GOOGLE_CLIENT_ID || ''
   });
 });
+
+// Serve uploaded images statically
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Public Gallery
+app.get('/api/gallery', (req, res) => {
+  try {
+    if (fs.existsSync(galleryPath)) {
+      const galleryData = JSON.parse(fs.readFileSync(galleryPath, 'utf-8'));
+      return res.json(galleryData);
+    }
+    res.json([]);
+  } catch (err) {
+    console.error('Failed to read gallery file:', err);
+    res.status(500).json({ message: 'Failed to read gallery items.' });
+  }
+});
+
+// Update Configuration (Admin)
+app.put('/api/admin/config', adminAuth, (req, res) => {
+  try {
+    const newConfig = req.body;
+    if (!newConfig.whatsappNumber || !newConfig.whatsappNumber2 || !newConfig.prices) {
+      return res.status(400).json({ message: 'Invalid configuration data' });
+    }
+    fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf-8');
+    res.json({ message: 'Configuration updated successfully!', config: newConfig });
+  } catch (err) {
+    console.error('Failed to update config:', err);
+    res.status(500).json({ message: 'Failed to save configuration.' });
+  }
+});
+
+// Add Gallery Item (Admin)
+app.post('/api/admin/gallery', adminAuth, (req, res) => {
+  try {
+    const { title, category, img, description, likes } = req.body;
+    if (!title || !category || !img) {
+      return res.status(400).json({ message: 'Title, category, and image URL are required.' });
+    }
+    const galleryData = JSON.parse(fs.readFileSync(galleryPath, 'utf-8'));
+    const newItem = {
+      id: genId(),
+      title,
+      category,
+      img,
+      description: description || '',
+      likes: parseInt(likes) || 0
+    };
+    galleryData.push(newItem);
+    fs.writeFileSync(galleryPath, JSON.stringify(galleryData, null, 2), 'utf-8');
+    res.status(201).json({ message: 'Gallery item created successfully!', item: newItem });
+  } catch (err) {
+    console.error('Failed to add gallery item:', err);
+    res.status(500).json({ message: 'Failed to save gallery item.' });
+  }
+});
+
+// Edit Gallery Item (Admin)
+app.put('/api/admin/gallery/:id', adminAuth, (req, res) => {
+  try {
+    const { title, category, img, description, likes } = req.body;
+    const itemId = req.params.id;
+    const galleryData = JSON.parse(fs.readFileSync(galleryPath, 'utf-8'));
+    const idx = galleryData.findIndex(item => item.id.toString() === itemId.toString());
+    if (idx === -1) {
+      return res.status(404).json({ message: 'Gallery item not found' });
+    }
+    galleryData[idx] = {
+      ...galleryData[idx],
+      title: title || galleryData[idx].title,
+      category: category || galleryData[idx].category,
+      img: img || galleryData[idx].img,
+      description: description !== undefined ? description : galleryData[idx].description,
+      likes: likes !== undefined ? parseInt(likes) : galleryData[idx].likes
+    };
+    fs.writeFileSync(galleryPath, JSON.stringify(galleryData, null, 2), 'utf-8');
+    res.json({ message: 'Gallery item updated successfully!', item: galleryData[idx] });
+  } catch (err) {
+    console.error('Failed to update gallery item:', err);
+    res.status(500).json({ message: 'Failed to update gallery item.' });
+  }
+});
+
+// Delete Gallery Item (Admin)
+app.delete('/api/admin/gallery/:id', adminAuth, (req, res) => {
+  try {
+    const itemId = req.params.id;
+    const galleryData = JSON.parse(fs.readFileSync(galleryPath, 'utf-8'));
+    const filtered = galleryData.filter(item => item.id.toString() !== itemId.toString());
+    if (filtered.length === galleryData.length) {
+      return res.status(404).json({ message: 'Gallery item not found' });
+    }
+    fs.writeFileSync(galleryPath, JSON.stringify(filtered, null, 2), 'utf-8');
+    res.json({ message: 'Gallery item deleted successfully!' });
+  } catch (err) {
+    console.error('Failed to delete gallery item:', err);
+    res.status(500).json({ message: 'Failed to delete gallery item.' });
+  }
+});
+
+// Upload image (Admin)
+app.post('/api/admin/upload', adminAuth, (req, res) => {
+  upload.single('image')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded.' });
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ success: true, url: fileUrl });
+  });
+});
+
 
 // Create booking
 app.post('/api/bookings', async (req, res) => {
@@ -227,7 +453,17 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ message: 'Order must contain at least 1 cone.' });
     }
 
-    const totalPrice = (siderQty * CONE_PRICES.siderCone) + (bridalQty * CONE_PRICES.bridalCone);
+    let currentPrices = { siderCone: 20, bridalCone: 40 };
+    try {
+      if (fs.existsSync(configPath)) {
+        const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        if (configData.prices) currentPrices = configData.prices;
+      }
+    } catch (e) {
+      console.error('Failed to read dynamic prices:', e);
+    }
+
+    const totalPrice = (siderQty * currentPrices.siderCone) + (bridalQty * currentPrices.bridalCone);
 
     let createdOrder;
     if (dbConnected && Order) {
