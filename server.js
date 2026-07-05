@@ -10,6 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const ADMIN_PASSWORD = (process.env.ADMIN_PASSWORD || 'farhan1625').trim();
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@skhenna.com').trim().toLowerCase();
+const ADMIN2_PASSWORD = (process.env.ADMIN2_PASSWORD || 'sahla22').trim();
+const ADMIN2_EMAIL = (process.env.ADMIN2_EMAIL || 'sahlajuwley22@gmail.com').trim().toLowerCase();
 const BOOKING_NOTIFICATION_EMAIL = (process.env.BOOKING_NOTIFICATION_EMAIL || 'sahlajuwley22@gmail.com').trim().toLowerCase();
 
 
@@ -95,7 +97,7 @@ const adminAuth = (req, res, next) => {
   const token = req.headers['authorization'];
   if (!token) return res.status(401).json({ message: 'No authorization token provided' });
   const password = token.replace('Bearer ', '');
-  if (password === ADMIN_PASSWORD) {
+  if (password === ADMIN_PASSWORD || password === ADMIN2_PASSWORD) {
     next();
   } else {
     res.status(403).json({ message: 'Invalid admin password' });
@@ -196,7 +198,7 @@ app.post('/api/bookings', async (req, res) => {
       </div>
     `;
 
-    const bookingEmails = [ADMIN_EMAIL, BOOKING_NOTIFICATION_EMAIL];
+    const bookingEmails = [...new Set([ADMIN_EMAIL, ADMIN2_EMAIL, BOOKING_NOTIFICATION_EMAIL])];
     bookingEmails.forEach(email => {
       sendNotificationEmail(email, `🌸 New Henna Booking: ${clientName} - ${occasion || 'Custom'}`, bookingEmailHtml)
         .then(() => console.log(`📧 Booking email notification sent to: ${email}`))
@@ -297,7 +299,7 @@ app.post('/api/orders', async (req, res) => {
       </div>
     `;
 
-    const orderEmails = [ADMIN_EMAIL, BOOKING_NOTIFICATION_EMAIL];
+    const orderEmails = [...new Set([ADMIN_EMAIL, ADMIN2_EMAIL, BOOKING_NOTIFICATION_EMAIL])];
     orderEmails.forEach(email => {
       sendNotificationEmail(email, `🛍️ New Order Received: #${orderId}`, orderEmailHtml)
         .then(() => console.log(`📧 Order email notification sent to: ${email}`))
@@ -403,14 +405,15 @@ app.post('/api/auth/send-otp', async (req, res) => {
   if (!email || !email.includes('@')) {
     return res.status(400).json({ success: false, message: 'Please enter a valid email address.' });
   }
-  if (email.toLowerCase() === ADMIN_EMAIL) {
+  const emailLower = email.trim().toLowerCase();
+  if (emailLower === ADMIN_EMAIL || emailLower === ADMIN2_EMAIL) {
     return res.status(400).json({ success: false, message: 'This email is reserved for admin.' });
   }
 
   try {
     const otp = crypto.randomInt(100000, 999999).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-    otpSessions.set(email.toLowerCase(), { otp, expiresAt });
+    otpSessions.set(emailLower, { otp, expiresAt });
 
     const otpHtml = `
       <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #fff7f0; padding: 32px; border-radius: 16px;">
@@ -448,30 +451,31 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 
   try {
-    const session = otpSessions.get(email.toLowerCase());
+    const emailLower = email.trim().toLowerCase();
+    const session = otpSessions.get(emailLower);
     if (!session) {
       return res.status(400).json({ success: false, message: 'OTP expired or not found. Please request a new one.' });
     }
     if (new Date() > session.expiresAt) {
-      otpSessions.delete(email.toLowerCase());
+      otpSessions.delete(emailLower);
       return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
     }
     if (session.otp !== otp.toString()) {
       return res.status(400).json({ success: false, message: 'Incorrect OTP. Please try again.' });
     }
 
-    otpSessions.delete(email.toLowerCase());
+    otpSessions.delete(emailLower);
 
     // Register or login user
     if (dbConnected && User) {
-      let user = await User.findOne({ email: email.toLowerCase() });
-      if (!user) user = await User.create({ email: email.toLowerCase() });
+      let user = await User.findOne({ email: emailLower });
+      if (!user) user = await User.create({ email: emailLower });
     } else {
-      const existing = users.find(u => u.email === email.toLowerCase());
-      if (!existing) users.push({ id: genId(), email: email.toLowerCase(), createdAt: new Date().toISOString() });
+      const existing = users.find(u => u.email === emailLower);
+      if (!existing) users.push({ id: genId(), email: emailLower, createdAt: new Date().toISOString() });
     }
 
-    const token = Buffer.from(email.toLowerCase()).toString('base64');
+    const token = Buffer.from(emailLower).toString('base64');
     res.json({ success: true, role: 'user', token, message: 'Email verified! You are now logged in.' });
   } catch (err) {
     console.error('OTP verify error:', err);
@@ -487,7 +491,8 @@ app.post('/api/auth/check-role', (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
 
-  if (email.toLowerCase() === ADMIN_EMAIL) {
+  const emailLower = email.trim().toLowerCase();
+  if (emailLower === ADMIN_EMAIL || emailLower === ADMIN2_EMAIL) {
     return res.json({ success: true, role: 'admin' });
   }
   return res.json({ success: true, role: 'user' });
@@ -502,17 +507,20 @@ app.post('/api/auth/google-login', async (req, res) => {
   if (!email) return res.status(400).json({ success: false, message: 'Email is required.' });
 
   try {
-    const isGoogleAdmin = email.toLowerCase() === ADMIN_EMAIL;
+    const emailLower = email.trim().toLowerCase();
+    const isGoogleAdmin = emailLower === ADMIN_EMAIL || emailLower === ADMIN2_EMAIL;
     const role = isGoogleAdmin ? 'admin' : 'user';
-    const token = isGoogleAdmin ? ADMIN_PASSWORD : Buffer.from(email.toLowerCase()).toString('base64');
+    const token = isGoogleAdmin 
+      ? (emailLower === ADMIN_EMAIL ? ADMIN_PASSWORD : ADMIN2_PASSWORD) 
+      : Buffer.from(emailLower).toString('base64');
 
     if (!isGoogleAdmin) {
       if (dbConnected && User) {
-        let user = await User.findOne({ email: email.toLowerCase() });
-        if (!user) user = await User.create({ email: email.toLowerCase(), verified: true });
+        let user = await User.findOne({ email: emailLower });
+        if (!user) user = await User.create({ email: emailLower, verified: true });
       } else {
-        const existing = users.find(u => u.email === email.toLowerCase());
-        if (!existing) users.push({ id: genId(), email: email.toLowerCase(), createdAt: new Date().toISOString() });
+        const existing = users.find(u => u.email === emailLower);
+        if (!existing) users.push({ id: genId(), email: emailLower, createdAt: new Date().toISOString() });
       }
     }
 
@@ -538,9 +546,15 @@ app.post('/api/admin/login', (req, res) => {
     return res.status(400).json({ success: false, message: 'Please enter both email and password.' });
   }
 
-  // Admin check — accepts the configured admin email OR 'admin' shorthand
-  if ((email.toLowerCase() === ADMIN_EMAIL || email === 'admin') && password === ADMIN_PASSWORD) {
+  const emailLower = email.trim().toLowerCase();
+  // Admin 1 check
+  if ((emailLower === ADMIN_EMAIL || emailLower === 'admin') && password === ADMIN_PASSWORD) {
     return res.json({ success: true, role: 'admin', token: ADMIN_PASSWORD });
+  }
+
+  // Admin 2 check
+  if ((emailLower === ADMIN2_EMAIL || emailLower === 'admin2') && password === ADMIN2_PASSWORD) {
+    return res.json({ success: true, role: 'admin', token: ADMIN2_PASSWORD });
   }
 
   res.status(401).json({ success: false, message: 'Invalid email or password.' });
