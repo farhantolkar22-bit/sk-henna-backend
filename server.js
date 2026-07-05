@@ -475,6 +475,25 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       if (!existing) users.push({ id: genId(), email: emailLower, createdAt: new Date().toISOString() });
     }
 
+    // Send login notification to admins asynchronously
+    const loginNotificationHtml = `
+      <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #fff7f0; padding: 32px; border-radius: 16px; border: 1px solid #fbcfe8;">
+        <h2 style="color: #db2777; margin-top: 0;">👤 User Login Notification</h2>
+        <hr style="border: none; border-top: 1px solid #fce7f3; margin: 16px 0;" />
+        <p style="color: #374151; font-size: 14px;">A user has successfully logged into the website:</p>
+        <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #fbcfe8; margin: 12px 0;">
+          <span style="font-size: 16px; font-weight: bold; color: #1e293b;">${emailLower}</span>
+        </div>
+        <p style="color: #6b7280; font-size: 12px; margin: 16px 0 0;">Logged in via OTP</p>
+      </div>
+    `;
+    const adminEmails = [...new Set([ADMIN_EMAIL, ADMIN2_EMAIL])];
+    adminEmails.forEach(adminEmail => {
+      sendNotificationEmail(adminEmail, `👤 User Login: ${emailLower}`, loginNotificationHtml)
+        .then(() => console.log(`📧 Login notification sent to admin: ${adminEmail}`))
+        .catch(err => console.error(`⚠️ Failed to send login notification to admin ${adminEmail}:`, err.message));
+    });
+
     const token = Buffer.from(emailLower).toString('base64');
     res.json({ success: true, role: 'user', token, message: 'Email verified! You are now logged in.' });
   } catch (err) {
@@ -522,6 +541,25 @@ app.post('/api/auth/google-login', async (req, res) => {
         const existing = users.find(u => u.email === emailLower);
         if (!existing) users.push({ id: genId(), email: emailLower, createdAt: new Date().toISOString() });
       }
+
+      // Send Google login notification to admins asynchronously
+      const googleLoginNotificationHtml = `
+        <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #fff7f0; padding: 32px; border-radius: 16px; border: 1px solid #fbcfe8;">
+          <h2 style="color: #db2777; margin-top: 0;">👤 User Login Notification</h2>
+          <hr style="border: none; border-top: 1px solid #fce7f3; margin: 16px 0;" />
+          <p style="color: #374151; font-size: 14px;">A user has successfully logged into the website:</p>
+          <div style="background: white; border-radius: 8px; padding: 12px; border: 1px solid #fbcfe8; margin: 12px 0;">
+            <span style="font-size: 16px; font-weight: bold; color: #1e293b;">${emailLower}</span>
+          </div>
+          <p style="color: #6b7280; font-size: 12px; margin: 16px 0 0;">Logged in via Google Sign-In</p>
+        </div>
+      `;
+      const adminEmails = [...new Set([ADMIN_EMAIL, ADMIN2_EMAIL])];
+      adminEmails.forEach(adminEmail => {
+        sendNotificationEmail(adminEmail, `👤 User Login (Google): ${emailLower}`, googleLoginNotificationHtml)
+          .then(() => console.log(`📧 Google login notification sent to admin: ${adminEmail}`))
+          .catch(err => console.error(`⚠️ Failed to send Google login notification to admin ${adminEmail}:`, err.message));
+      });
     }
 
     res.json({
