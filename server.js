@@ -582,7 +582,7 @@ async function sendViaGmailAPI(to, subject, htmlBody) {
 
   // Build raw RFC 2822 email
   const emailLines = [
-    `From: "SK Henna Security" <security@skhenna.com>`,
+    `From: "SK Henna" <${process.env.EMAIL_USER || 'shifakheratkar@gmail.com'}>`,
     `To: ${to}`,
     `Reply-To: no-reply@skhenna.com`,
     `Subject: ${encodedSubject}`,
@@ -633,7 +633,7 @@ async function sendNotificationEmail(to, subject, htmlBody) {
   if (appPwdTransporter) {
     const fromUser = (process.env.EMAIL_USER || '').trim();
     await appPwdTransporter.sendMail({
-      from: `"SK Henna Security" <${fromUser}>`,
+      from: `"SK Henna" <${fromUser}>`,
       to: recipient,
       replyTo: 'no-reply@skhenna.com',
       subject: subject,
