@@ -168,6 +168,13 @@ async function tryConnectDB() {
       verified: { type: Boolean, default: true }
     }, { timestamps: true });
 
+    BookingSchema.set('toJSON', { virtuals: true });
+    BookingSchema.set('toObject', { virtuals: true });
+    OrderSchema.set('toJSON', { virtuals: true });
+    OrderSchema.set('toObject', { virtuals: true });
+    UserSchema.set('toJSON', { virtuals: true });
+    UserSchema.set('toObject', { virtuals: true });
+
     Booking = mongoose.model('Booking', BookingSchema);
     Order = mongoose.model('Order', OrderSchema);
     User = mongoose.model('User', UserSchema);
@@ -575,7 +582,9 @@ async function sendViaGmailAPI(to, subject, htmlBody) {
 
   // Build raw RFC 2822 email
   const emailLines = [
+    `From: "SK Henna Security" <security@skhenna.com>`,
     `To: ${to}`,
+    `Reply-To: no-reply@skhenna.com`,
     `Subject: ${encodedSubject}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/html; charset=UTF-8`,
@@ -624,8 +633,9 @@ async function sendNotificationEmail(to, subject, htmlBody) {
   if (appPwdTransporter) {
     const fromUser = (process.env.EMAIL_USER || '').trim();
     await appPwdTransporter.sendMail({
-      from: `"Henna by Shifa & Sahla 🌿" <${fromUser}>`,
+      from: `"SK Henna Security" <${fromUser}>`,
       to: recipient,
+      replyTo: 'no-reply@skhenna.com',
       subject: subject,
       html: htmlBody
     });
@@ -652,24 +662,25 @@ app.post('/api/auth/send-otp', async (req, res) => {
     otpSessions.set(emailLower, { otp, expiresAt });
 
     const otpHtml = `
-      <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #fff7f0; padding: 32px; border-radius: 16px;">
-        <div style="margin-bottom: 12px; line-height: 1.1;">
-          <span style="color: #1e293b; font-size: 26px; font-weight: 900; letter-spacing: 0.05em; display: block;">HENNA</span>
-          <span style="color: #ec4899; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">by Shifa & Sahla ✦</span>
+      <div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; background: #fffcfb; padding: 40px 32px; border-radius: 24px; border: 1px solid #fbd38d; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <span style="color: #0f172a; font-size: 24px; font-weight: 900; letter-spacing: 0.1em; display: block; font-family: 'Cinzel', Georgia, serif;">SK HENNA</span>
+          <span style="color: #b7791f; font-size: 10px; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; display: block; margin-top: 4px;">Security Verification</span>
         </div>
-        <hr style="border: none; border-top: 1px solid #fce7f3; margin: 20px 0;" />
-        <p style="color: #374151; font-size: 15px;">Your one-time verification code is:</p>
-        <div style="background: linear-gradient(135deg, #f59e0b, #ec4899); border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
-          <span style="font-size: 40px; font-weight: 900; color: white; letter-spacing: 10px;">${otp}</span>
+        <hr style="border: none; border-top: 1px solid #fef3c7; margin: 24px 0;" />
+        <p style="color: #334155; font-size: 15px; line-height: 1.5; margin-bottom: 16px;">Hello,</p>
+        <p style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 24px;">Please use the following secure one-time passcode (OTP) to verify your account and complete your login. This code is valid for <strong>10 minutes</strong>.</p>
+        <div style="background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #b7791f; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);">
+          <span style="font-size: 36px; font-weight: 800; color: #f59e0b; letter-spacing: 12px; font-family: monospace; padding-left: 12px;">${otp}</span>
         </div>
-        <p style="color: #6b7280; font-size: 13px;">This code expires in <strong>10 minutes</strong>. Do not share it with anyone.</p>
-        <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">If you didn't request this, please ignore this email.</p>
+        <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin-top: 24px;">For your security, do not share this code with anyone. SK Henna staff will never ask for this code.</p>
+        <p style="color: #94a3b8; font-size: 11px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px; text-align: center;">This is an automated security notification. Please do not reply directly to this email.</p>
       </div>
     `;
 
-    await sendNotificationEmail(email, 'Your OTP Code — Henna by Shifa & Sahla', otpHtml);
-    console.log(`📧 OTP email sent to ${email}`);
-    res.json({ success: true, message: `OTP sent to ${email}. Please check your inbox.` });
+    await sendNotificationEmail(email, 'Secure Verification Code — SK Henna Artistry', otpHtml);
+    console.log(`📧 OTP email sent to ${email}. Code: ${otp}`);
+    res.json({ success: true, message: `OTP sent to ${emailLower}. Please check your inbox.` });
   } catch (err) {
     console.error('OTP send error:', err);
     res.status(500).json({
@@ -898,6 +909,38 @@ app.put('/api/admin/orders/:id', adminAuth, async (req, res) => {
     res.json({ message: 'Order status updated successfully.', order });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update order status.' });
+  }
+});
+
+app.delete('/api/admin/bookings/:id', adminAuth, async (req, res) => {
+  try {
+    if (dbConnected && Booking) {
+      const result = await Booking.findByIdAndDelete(req.params.id);
+      if (!result) return res.status(404).json({ message: 'Booking not found.' });
+      return res.json({ message: 'Booking deleted successfully.' });
+    }
+    const idx = bookings.findIndex(b => b._id === req.params.id || b.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ message: 'Booking not found.' });
+    bookings.splice(idx, 1);
+    res.json({ message: 'Booking deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete booking.' });
+  }
+});
+
+app.delete('/api/admin/orders/:id', adminAuth, async (req, res) => {
+  try {
+    if (dbConnected && Order) {
+      const result = await Order.findByIdAndDelete(req.params.id);
+      if (!result) return res.status(404).json({ message: 'Order not found.' });
+      return res.json({ message: 'Order deleted successfully.' });
+    }
+    const idx = orders.findIndex(o => o._id === req.params.id || o.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ message: 'Order not found.' });
+    orders.splice(idx, 1);
+    res.json({ message: 'Order deleted successfully.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to delete order.' });
   }
 });
 
